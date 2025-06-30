@@ -215,15 +215,17 @@ onMounted(fetchProducts);
             <strong>Customer Reviews:</strong>
             <VList class="mt-2" density="compact">
               <VListItem v-for="(review, index) in selectedProduct.reviews" :key="index">
-                <VListItemContent>
+                <div class="d-flex flex-column">
                   <div class="font-weight-medium">
                     {{ review.reviewerName }} — ★{{ review.rating }}
                   </div>
                   <div class="text-caption">
                     {{ new Date(review.date).toLocaleDateString() }}
                   </div>
-                  <div class="text-body-2 mt-1">{{ review.comment }}</div>
-                </VListItemContent>
+                  <div class="text-body-2 mt-1">
+                    {{ review.comment }}
+                  </div>
+                </div>
               </VListItem>
             </VList>
           </div>
