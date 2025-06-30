@@ -15,12 +15,12 @@ const loading = ref(true);
 
 const headers = [
   { title: "ID", key: "id" },
-  { title: "Name", key: "name", align: "center" },
+  { title: "Product Name", key: "title", align: "left" },
   { title: "Category", key: "category", align: "center" },
   { title: "Price", key: "price", align: "center" },
   { title: "Rating", key: "rating", align: "center" },
   { title: "Stock", key: "stock", align: "center" },
-  { title: "Status", key: "available", align: "center" },
+  { title: "Status", key: "availabilityStatus", align: "center" },
   { title: "Actions", key: "actions", align: "center", sortable: false },
 ];
 
@@ -28,18 +28,10 @@ const fetchProducts = async () => {
   loading.value = true;
   try {
     const res = await axios.get("https://dummyjson.com/products?limit=100");
-    const mapped = res.data.products.map((p) => ({
-      id: p.id,
-      name: p.title,
-      category: p.category,
-      price: p.price,
-      rating: p.rating,
-      stock: p.stock,
-      available: p.availabilityStatus,
-      full: p,
-    }));
-    products.value = mapped;
-    categories.value = [...new Set(mapped.map((p) => p.category))];
+    products.value = res.data.products;
+    categories.value = [...new Set(products.value.map((p) => p.category))];
+  } catch (err) {
+    console.error("Fetch error:", err);
   } finally {
     loading.value = false;
   }
@@ -50,7 +42,7 @@ const filteredProducts = computed(() => {
   if (search.value) {
     temp = temp.filter(
       (p) =>
-        p.name.toLowerCase().includes(search.value.toLowerCase()) ||
+        p.title.toLowerCase().includes(search.value.toLowerCase()) ||
         p.category.toLowerCase().includes(search.value.toLowerCase())
     );
   }
@@ -65,184 +57,189 @@ const openDialog = (product) => {
   dialog.value = true;
 };
 
-const reset = () => {
+const reset = async () => {
   page.value = 1;
   selectedCategory.value = null;
-  search.value = null;
+  search.value = "";
+  await fetchProducts(); 
 };
+
 
 onMounted(fetchProducts);
 </script>
 
+
 <template>
   <VContainer fluid>
-    <VCard class="pa-4">
-      <VToolbar flat class="flex-wrap">
-        <VToolbarTitle class="text-h6">Product Details</VToolbarTitle>
-        <VSpacer />
-        <VTextField
-          v-model="search"
-          label="Search"
-          append-inner-icon="mdi-magnify"
-          dense
-          class="mt-5"
-          variant="outlined"
-          style="max-width: 200px"
-        />
-        <VSelect
-          v-model="selectedCategory"
-          :items="categories"
-          label="Filter by Category"
-          clearable
-          dense
-          class="mt-7 ga-2"
-          variant="outlined"
-          style="max-width: 200px"
-        />
-        <VTooltip location="top">
-          <template #activator="{ props }">
-            <VBtn icon v-bind="props" class="ma-2" @click="reset">
-              <VIcon>mdi-refresh</VIcon>
-            </VBtn>
-          </template>
-          <span>Reset Filters</span>
-        </VTooltip>
-      </VToolbar>
+    <VToolbar flat class="flex-wrap">
+      <VToolbarTitle class="text-h6">Product Details</VToolbarTitle>
+      <VSpacer />
+      <VTextField
+        v-model="search"
+        label="Search"
+        append-inner-icon="mdi-magnify"
+        dense
+        class="mt-7"
+        variant="outlined"
+        style="max-width: 200px"
+        clearable
+      />
+      <VSelect
+        v-model="selectedCategory"
+        :items="categories"
+        label="Filter by Category"
+        clearable
+        dense
+        class="mt-9 ga-2"
+        variant="outlined"
+        style="max-width: 200px"
+      />
+      <VTooltip location="top">
+        <template #activator="{ props }">
+          <VBtn icon v-bind="props" class="ma-2" @click="reset">
+            <VIcon>mdi-refresh</VIcon>
+          </VBtn>
+        </template>
+        <span>Refresh</span>
+      </VTooltip>
+    </VToolbar>
 
-      <VSkeletonLoader
-        v-if="loading"
-        type="table-thead, table-row@10"
-        class="mx-4 my-6"
-        boilerplate
-        elevation="1"
+    <VSkeletonLoader
+      v-if="loading"
+      type="table-thead, table-row@11"
+      class="mx-4 my-6"
+      elevation="1"
+    />
+
+    <VDataTable
+      v-else
+      :headers="headers"
+      :items="filteredProducts"
+      :items-per-page="itemsPerPage"
+      :page="page"
+      v-model="selected"
+      show-select
+      show-current-page
+      return-object
+      class="elevation-2 mt-0 w-100"
+      density="comfortable"
+      fixed-header
+      height="500"
+    >
+      <template #item.rating="{ item }">
+        <VRating
+          v-model="item.rating"
+          readonly
+          density="compact"
+          half-increments
+          color="amber"
+        />
+      </template>
+
+      <template #item.availabilityStatus="{ item }">
+        <VChip
+          :color="item.availabilityStatus === 'In Stock' ? 'green' : 'red'"
+          class="text-white font-weight-medium"
+          size="small"
+        >
+          {{ item.availabilityStatus.toUpperCase() }}
+        </VChip> 
+      </template>
+
+      <template #item.actions="{ item}">
+        <VBtn
+          size="small"
+          color="primary"
+          variant="tonal"
+          @click="openDialog(item)"
+        >
+          View 
+        </VBtn> 
+      </template>
+    </VDataTable>
+
+    <VDialog v-model="dialog" width="600" persistent scrollable>
+  <VCard class="overflow-hidden">
+
+    <VCardTitle
+      class="text-h6 d-flex justify-space-between align-center sticky-header"
+    >
+      {{ selectedProduct?.title || "Product Details" }}
+   
+    </VCardTitle>
+
+ 
+    <VCardText class="dialog-body">
+      <VImg
+        :src="selectedProduct?.thumbnail || selectedProduct?.images?.[0]"
+        class="product-image mb-4"
       />
 
-      <VDataTable
-        v-else
-        :headers="headers"
-        :items="filteredProducts"
-        :items-per-page="itemsPerPage"
-        :page="page"
-        v-model="selected"
-        show-select
-        return-object
-        class="elevation-2 mt-4"
-        density="comfortable"
-        fixed-header
-        height="400"
-      >
-        <template #item.rating="{ item }">
-          <VRating
-            v-model="item.rating"
-            readonly
-            density="compact"
-            half-increments
-            color="amber"
-          />
-        </template>
+      <strong>Brand:</strong> {{ selectedProduct?.brand }} <br>
+      <strong>SKU:</strong> {{ selectedProduct?.sku }} <br>
+      <strong>Category:</strong> {{ selectedProduct?.category }} <br>
+      <strong>Price:</strong> ${{ selectedProduct?.price }} <br>
+      <strong>Stock:</strong> {{ selectedProduct?.stock }} <br>
+      <strong>Status:</strong> {{ selectedProduct?.availabilityStatus || "Unavailable" }} <br>
+      <strong>Weight:</strong> {{ selectedProduct?.weight }}g
 
-        <template #item.available="{ item }">
-          <VChip
-            :color="item.available === 'In Stock' ? 'green' : 'red'"
-            class="text-white font-weight-medium"
-            size="small"
-          >
-            {{ item.available }}
-          </VChip>
-        </template>
-
-        <template #item.actions="{ item }">
-          <VBtn
-            size="small"
-            color="primary"
-            variant="tonal"
-            @click="openDialog(item.full)"
-          >
-            View
-          </VBtn>
-        </template>
-      </VDataTable>
-
-      <div class="text-center pt-4">
-        <VPagination
-          v-model="page"
-          :length="Math.ceil(filteredProducts.length / itemsPerPage)"
-          total-visible="7"
-          color="primary"
-        />
+      <div v-if="selectedProduct?.dimensions" class="mt-2">
+        <strong>Dimensions (cm):</strong>
+        <ul class="pl-4">
+          <li>Width: {{ selectedProduct.dimensions.width }}</li>
+          <li>Height: {{ selectedProduct.dimensions.height }}</li>
+          <li>Depth: {{ selectedProduct.dimensions.depth }}</li>
+        </ul>
       </div>
-    </VCard>
 
-    <VDialog v-model="dialog" width="600" persistent>
-      <VCard>
-        <VCardTitle class="text-h6">
-          {{ selectedProduct?.name }}
-          <VSpacer />
-          <VBtn icon @click="dialog = false">
-            <VIcon>mdi-close</VIcon>
-          </VBtn>
-        </VCardTitle>
-        <VCardText>
-          <VImg
-            :src="selectedProduct?.thumbnail || selectedProduct?.images?.[0]"
-            class="product-image mb-4"
-          />
+      <div class="mt-2">
+        <strong>Warranty:</strong> {{ selectedProduct?.warrantyInformation }}
+      </div>
+     
+        <strong>Shipping:</strong> {{ selectedProduct?.shippingInformation }}
+     
 
-          <div><strong>Brand:</strong> {{ selectedProduct?.brand }}</div>
-          <div><strong>SKU:</strong> {{ selectedProduct?.sku }}</div>
-          <div><strong>Category:</strong> {{ selectedProduct?.category }}</div>
-          <div><strong>Price:</strong> ${{ selectedProduct?.price }}</div>
-          <div><strong>Stock:</strong> {{ selectedProduct?.stock }}</div>
-          <div><strong>Status:</strong> {{ selectedProduct?.available }}</div>
-          <div><strong>Weight:</strong> {{ selectedProduct?.weight }}g</div>
+      <div class="mt-2"><strong>Description:</strong></div>
+      <div class="text-subtitle-2">
+        {{ selectedProduct?.description }}
+      </div>
 
-          <div class="mt-2"><strong>Dimensions (cm):</strong></div>
-          <ul class="pl-4">
-            <li>Width: {{ selectedProduct?.dimensions?.width }}</li>
-            <li>Height: {{ selectedProduct?.dimensions?.height }}</li>
-            <li>Depth: {{ selectedProduct?.dimensions?.depth }}</li>
-          </ul>
+      <div v-if="selectedProduct?.reviews?.length" class="mt-4">
+        <strong>Customer Reviews:</strong>
+        <VList class="mt-2" density="compact">
+          <VListItem
+            v-for="(review, index) in selectedProduct.reviews"
+            :key="index"
+          >
+            <div class="d-flex flex-column">
+              <div class="font-weight-medium">
+                {{ review.reviewerName }} — ★{{ review.rating }}
+              </div>
+              <div class="text-caption">
+                {{ new Date(review.date).toLocaleDateString() }}
+              </div>
+              <div class="text-body-2 mt-1">
+                {{ review.comment }}
+              </div>
+            </div>
+          </VListItem>
+        </VList>
+      </div>
+    </VCardText>
 
-          <div class="mt-2">
-            <strong>Warranty:</strong> {{ selectedProduct?.warrantyInformation }}
-          </div>
-          <div><strong>Shipping:</strong> {{ selectedProduct?.shippingInformation }}</div>
+    <VCardActions class="dialog-footer">
+      <VSpacer />
+      <VBtn color="error" variant="tonal" @click="dialog = false">Close</VBtn>
+    </VCardActions>
+  </VCard>
+</VDialog>
 
-          <div class="mt-2"><strong>Description:</strong></div>
-          <div class="text-subtitle-2">{{ selectedProduct?.description }}</div>
-
-          <div v-if="selectedProduct?.reviews?.length" class="mt-4">
-            <strong>Customer Reviews:</strong>
-            <VList class="mt-2" density="compact">
-              <VListItem v-for="(review, index) in selectedProduct.reviews" :key="index">
-                <div class="d-flex flex-column">
-                  <div class="font-weight-medium">
-                    {{ review.reviewerName }} — ★{{ review.rating }}
-                  </div>
-                  <div class="text-caption">
-                    {{ new Date(review.date).toLocaleDateString() }}
-                  </div>
-                  <div class="text-body-2 mt-1">
-                    {{ review.comment }}
-                  </div>
-                </div>
-              </VListItem>
-            </VList>
-          </div>
-        </VCardText>
-      </VCard>
-    </VDialog>
   </VContainer>
 </template>
 
+
 <style scoped>
-.product-image {
-  width: 100%;
-  height: 250px;
-  object-fit: contain;
-  border-radius: 8px;
-  background-color: #f5f5f5;
-}
+
 
 @media (max-width: 768px) {
   .v-toolbar__content {
@@ -250,4 +247,35 @@ onMounted(fetchProducts);
     align-items: stretch;
   }
 }
+
+.product-image {
+  width: 100%;
+  height: 200px;
+  object-fit: contain;
+  border-radius: 8px;
+  background-color: #f5f5f5;
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid #eee;
+}
+
+.dialog-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.dialog-footer {
+  border-top: 1px solid #eee;
+  padding: 12px 24px;
+}
 </style>
+
+
+
+
